@@ -50,15 +50,28 @@ func (client *ClientImpl) Do(req *http.Request) (*http.Response, error) {
 
 // InitHTTPClient .
 func InitHTTPClient(rwTimeout time.Duration, connectTimeout ...time.Duration) {
-	t := 2 * time.Second
+	sec := 2 * time.Second
 	if len(connectTimeout) > 0 {
-		t = connectTimeout[0]
+		sec = connectTimeout[0]
 	}
+	defaultHTTPClient = NewHTTPClient(rwTimeout, sec)
+}
 
+// InitH2CClient .
+func InitH2CClient(rwTimeout time.Duration, connectTimeout ...time.Duration) {
+	sec := 2 * time.Second
+	if len(connectTimeout) > 0 {
+		sec = connectTimeout[0]
+	}
+	defaultH2CClient = NewH2CClient(rwTimeout, sec)
+}
+
+// NewHTTPClient .
+func NewHTTPClient(rwTimeout time.Duration, connectTimeout time.Duration) *ClientImpl {
 	tran := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   t,
+			Timeout:   connectTimeout,
 			KeepAlive: 15 * time.Second,
 			DualStack: true,
 		}).DialContext,
@@ -70,27 +83,23 @@ func InitHTTPClient(rwTimeout time.Duration, connectTimeout ...time.Duration) {
 		MaxIdleConnsPerHost:   100,
 	}
 
-	defaultHTTPClient = &ClientImpl{Client: &http.Client{
+	return &ClientImpl{Client: &http.Client{
 		Transport: tran,
 		Timeout:   rwTimeout,
 	}}
 }
 
-// InitH2CClient .
-func InitH2CClient(rwTimeout time.Duration, connectTimeout ...time.Duration) {
+// NewH2CClient .
+func NewH2CClient(rwTimeout time.Duration, connectTimeout time.Duration) *ClientImpl {
 	tran := &http2.Transport{
 		AllowHTTP: true,
 		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-			t := 2 * time.Second
-			if len(connectTimeout) > 0 {
-				t = connectTimeout[0]
-			}
-			fun := timeoutDialer(t)
+			fun := timeoutDialer(connectTimeout)
 			return fun(network, addr)
 		},
 	}
 
-	defaultH2CClient = &ClientImpl{Client: &http.Client{
+	return &ClientImpl{Client: &http.Client{
 		Transport: tran,
 		Timeout:   rwTimeout,
 	}}
